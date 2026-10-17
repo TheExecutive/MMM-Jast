@@ -207,13 +207,45 @@ describe('JastBackendUtils', () => {
       expect(mockQuoteCombine).not.toHaveBeenCalled()
     })
 
-    it('should handle API errors gracefully', async () => {
-      mockQuoteCombine.mockRejectedValue(new Error('API Error'))
+    it('should handle API errors gracefully, retrying each symbol before giving up', async () => {
+      vi.useFakeTimers()
+      try {
+        mockQuoteCombine.mockRejectedValue(new Error('API Error'))
 
-      const result: StockResponse[] = await JastBackendUtils.requestStocks(mockConfig)
+        const pending = JastBackendUtils.requestStocks(mockConfig)
+        await vi.runAllTimersAsync()
+        const result: StockResponse[] = await pending
 
-      expect(result).toHaveLength(0)
-      expect(mockQuoteCombine).toHaveBeenCalledTimes(2)
+        expect(result).toHaveLength(0)
+        // 2 symbols x (1 attempt + 2 retries)
+        expect(mockQuoteCombine).toHaveBeenCalledTimes(6)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('should recover when a retry succeeds', async () => {
+      vi.useFakeTimers()
+      try {
+        mockQuoteCombine.mockRejectedValueOnce(new Error('Schema validation failed'))
+        mockQuoteCombine.mockResolvedValue({
+          currency: 'USD',
+          regularMarketChange: 1,
+          regularMarketChangePercent: 1,
+          regularMarketPreviousClose: 100,
+          regularMarketPrice: 101,
+          regularMarketTime: new Date()
+        })
+
+        const pending = JastBackendUtils.requestStocks({ ...mockConfig, stocks: [mockConfig.stocks[0]] })
+        await vi.runAllTimersAsync()
+        const result: StockResponse[] = await pending
+
+        expect(result).toHaveLength(1)
+        expect(mockQuoteCombine).toHaveBeenCalledTimes(2)
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it('should skip symbols that yahoo-finance2 resolves to undefined', async () => {

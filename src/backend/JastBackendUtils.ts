@@ -21,6 +21,8 @@ const YahooFinance = ('default' in yahooFinance2Module
 
 // Yahoo can occasionally accept a connection but never respond; abort rather than hang the whole update.
 const REQUEST_TIMEOUT_MS = 10_000
+const MAX_RETRIES = 2
+const RETRY_DELAY_MS = 3_000
 
 // Reused across polls, since yahoo-finance2 v4 no longer shares cookie/crumb state across instances.
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] })
@@ -40,14 +42,23 @@ const QUOTE_FIELDS = [
 const JastBackendUtils = {
   async requestStocks(config: Config): Promise<StockResponse[]> {
     const stocks = []
-    // All requests start at roughly the same time, so they can share one timeout budget.
-    const requestOptions: QuoteRequestOptions = {
-      fetchOptions: { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }
+    // Yahoo intermittently returns a payload that fails schema validation, which fails every symbol in
+    // the batch at once. Retrying after a short delay (still batched together) almost always succeeds.
+    const requestWithRetry = async (symbol: string) => {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await yahooFinance.quoteCombine(
+            symbol,
+            { fields: QUOTE_FIELDS },
+            { fetchOptions: { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) } }
+          )
+        } catch (e) {
+          if (attempt >= MAX_RETRIES) throw e
+          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * (attempt + 1)))
+        }
+      }
     }
-    const promises = config.stocks.map((stock) =>
-      yahooFinance.quoteCombine(stock.symbol, { fields: QUOTE_FIELDS }, requestOptions)
-    )
-    const apiResponses = await Promise.all(promises.map((p) => p.catch((e) => e)))
+    const apiResponses = await Promise.all(config.stocks.map((stock) => requestWithRetry(stock.symbol).catch((e) => e)))
 
     for (const [index, response] of apiResponses.entries()) {
       if (response instanceof Error) {

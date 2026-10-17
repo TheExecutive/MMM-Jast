@@ -8,7 +8,6 @@ const sanityFields = [
   'regularMarketChangePercent',
   'regularMarketPrice',
   'currency',
-  'longName',
   'regularMarketPreviousClose'
 ]
 
