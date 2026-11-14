@@ -136,7 +136,7 @@ describe('JastBackendUtils', () => {
       expect(mockQuoteCombine).toHaveBeenCalledWith(
         'AAPL',
         { fields: expect.arrayContaining(['regularMarketPrice', 'currency']) },
-        { fetchOptions: { signal: expect.any(AbortSignal) } }
+        { fetchOptions: { signal: expect.any(AbortSignal) }, validateResult: true }
       )
     })
 
@@ -246,6 +246,37 @@ describe('JastBackendUtils', () => {
       } finally {
         vi.useRealTimers()
       }
+    })
+
+    it('should fall back to an unvalidated request when Yahoo fails schema validation', async () => {
+      const validationError = new Error('Failed Yahoo Schema validation')
+      validationError.name = 'FailedYahooValidationError'
+      mockQuoteCombine.mockImplementation(async (_symbol, _options, requestOptions) => {
+        if (requestOptions?.validateResult === false) {
+          return {
+            currency: 'USD',
+            regularMarketChange: 1,
+            regularMarketChangePercent: 1,
+            regularMarketPreviousClose: 100,
+            regularMarketPrice: 101,
+            regularMarketTime: new Date()
+          }
+        }
+        throw validationError
+      })
+
+      const result: StockResponse[] = await JastBackendUtils.requestStocks({
+        ...mockConfig,
+        stocks: [mockConfig.stocks[0]]
+      })
+
+      expect(result).toHaveLength(1)
+      expect(mockQuoteCombine).toHaveBeenCalledTimes(2)
+      expect(mockQuoteCombine).toHaveBeenLastCalledWith(
+        'AAPL',
+        expect.anything(),
+        expect.objectContaining({ validateResult: false })
+      )
     })
 
     it('should skip symbols that yahoo-finance2 resolves to undefined', async () => {

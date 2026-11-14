@@ -6,6 +6,7 @@ import { StockResponse } from '../types/StockResponse'
 
 interface QuoteRequestOptions {
   fetchOptions?: RequestInit
+  validateResult?: boolean
 }
 
 // TypeScript sees the namespace import, but Rollup provides the correct format at runtime
@@ -45,14 +46,21 @@ const JastBackendUtils = {
     // Yahoo intermittently returns a payload that fails schema validation, which fails every symbol in
     // the batch at once. Retrying after a short delay (still batched together) almost always succeeds.
     const requestWithRetry = async (symbol: string) => {
+      let validateResult = true
       for (let attempt = 0; ; attempt++) {
         try {
           return await yahooFinance.quoteCombine(
             symbol,
             { fields: QUOTE_FIELDS },
-            { fetchOptions: { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) } }
+            { fetchOptions: { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }, validateResult }
           )
         } catch (e) {
+          // Validation failures (seen on weekends) usually concern fields we don't request; the required
+          // fields are still checked in node_helper, so accept the unvalidated payload right away.
+          if (validateResult && e instanceof Error && e.name === 'FailedYahooValidationError') {
+            validateResult = false
+            continue
+          }
           if (attempt >= MAX_RETRIES) throw e
           await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * (attempt + 1)))
         }
