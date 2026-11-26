@@ -45,23 +45,36 @@ interface PortfolioView {
 }
 
 const JastUtils = {
-  getCurrentValueStyle(config: Config): CurrencyStyle {
+  /* Decimals for a price: the stock's own setting, else the global one; "auto" gives
+     2 for prices of 1 or more and enough to show two significant digits below that. */
+  getDecimals(config: Config, stock?: StockResponse): number {
+    const own = stock?.meta.decimals
+    if (typeof own === 'number' && own >= 0) return Math.min(own, 8)
+    if (config.numberDecimalsValues !== 'auto') return Math.min(Math.max(0, config.numberDecimalsValues), 8)
+    const price = Math.abs(stock?.price?.regularMarketPrice ?? 1)
+    if (!(price > 0) || price >= 1) return 2
+    return Math.min(8, Math.max(2, Math.ceil(-Math.log10(price)) + 1))
+  },
+
+  getCurrentValueStyle(config: Config, stock?: StockResponse): CurrencyStyle {
+    const digits = JastUtils.getDecimals(config, stock)
     return {
       style: config.showCurrency ? 'currency' : 'decimal',
       useGrouping: config.useGrouping,
       currencyDisplay: config.currencyStyle,
-      minimumFractionDigits: config.numberDecimalsValues <= 8 ? config.numberDecimalsValues : 8,
-      maximumFractionDigits: config.numberDecimalsValues <= 8 ? config.numberDecimalsValues : 8
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits
     }
   },
 
-  getChangeValueStyle(config: Config): CurrencyStyle {
+  getChangeValueStyle(config: Config, stock?: StockResponse): CurrencyStyle {
+    const digits = JastUtils.getDecimals(config, stock)
     return {
       style: config.showChangeValueCurrency ? 'currency' : 'decimal',
       useGrouping: config.useGrouping,
       currencyDisplay: config.currencyStyle,
-      minimumFractionDigits: config.numberDecimalsValues <= 8 ? config.numberDecimalsValues : 8,
-      maximumFractionDigits: config.numberDecimalsValues <= 8 ? config.numberDecimalsValues : 8
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits
     }
   },
 
@@ -172,7 +185,7 @@ const JastUtils = {
   getStockPerformanceAsString(stock: StockResponse, config: Config): string {
     return JastUtils.getStockPerformance(stock).toLocaleString(
       config.locale,
-      Object.assign(JastUtils.getChangeValueStyle(config), {
+      Object.assign(JastUtils.getChangeValueStyle(config, stock), {
         currency: stock.price?.currency ?? 'USD'
       })
     )
@@ -181,7 +194,7 @@ const JastUtils = {
   getStockPerformanceSumAsString(stock: StockResponse, config: Config): string {
     return (JastUtils.getStockPerformance(stock) * (stock.meta.quantity ?? 0)).toLocaleString(
       config.locale,
-      Object.assign(JastUtils.getChangeValueStyle(config), {
+      Object.assign(JastUtils.getChangeValueStyle(config, stock), {
         currency: stock.price?.currency ?? 'USD'
       })
     )
@@ -206,7 +219,7 @@ const JastUtils = {
   getStockChangeAsString(stock: StockResponse, config: Config): string {
     return JastUtils.getStockChange(stock).toLocaleString(
       config.locale,
-      Object.assign(JastUtils.getChangeValueStyle(config), {
+      Object.assign(JastUtils.getChangeValueStyle(config, stock), {
         currency: stock.price?.currency ?? 'USD'
       })
     )
@@ -219,7 +232,7 @@ const JastUtils = {
   getCurrentValueAsString(stock: StockResponse, config: Config): string {
     return JastUtils.getCurrentValue(stock).toLocaleString(
       config.locale,
-      Object.assign(JastUtils.getCurrentValueStyle(config), {
+      Object.assign(JastUtils.getCurrentValueStyle(config, stock), {
         currency: stock.price?.currency ?? 'USD'
       })
     )
@@ -228,7 +241,7 @@ const JastUtils = {
   getPurchasePriceAsString(stock: StockResponse, config: Config): string {
     return (stock.meta.purchasePrice ?? 0).toLocaleString(
       config.locale,
-      Object.assign(JastUtils.getCurrentValueStyle(config), {
+      Object.assign(JastUtils.getCurrentValueStyle(config, stock), {
         currency: stock.price?.currency ?? 'USD'
       })
     )

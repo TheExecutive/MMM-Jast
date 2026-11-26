@@ -77,7 +77,8 @@ const JastBackendUtils = {
           name: config.stocks[index].name,
           quantity: config.stocks[index].quantity,
           hidden: config.stocks[index].hidden,
-          purchasePrice: config.stocks[index].purchasePrice
+          purchasePrice: config.stocks[index].purchasePrice,
+          decimals: config.stocks[index].decimals
         }
         // quoteCombine() returns changePercent as a percent number (2.86 for 2.86%), but the rest of
         // this module expects a fraction (0.0286), matching Intl.NumberFormat's percent style input.

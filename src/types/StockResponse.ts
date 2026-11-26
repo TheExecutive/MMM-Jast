@@ -9,5 +9,6 @@ export interface StockResponse {
     name?: string
     quantity?: number
     hidden?: boolean
+    decimals?: number
   }
 }

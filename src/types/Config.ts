@@ -6,7 +6,7 @@ export interface Config {
   maxChangeAge: number
   maxWidth: string
   numberDecimalsPercentages: number
-  numberDecimalsValues: number
+  numberDecimalsValues: number | 'auto'
   displayMode: 'vertical' | 'horizontal' | 'horizontal-static' | 'none' | 'table' | 'default-table'
   scroll?: 'vertical' | 'horizontal' | 'none' | 'table'
   showCurrency: boolean
@@ -37,4 +37,5 @@ export interface Stock {
   quantity?: number
   hidden?: boolean
   purchasePrice?: number
+  decimals?: number
 }
